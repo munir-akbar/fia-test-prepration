@@ -1,1 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quiz In Progress | FIA Test Preparation</title>
+<meta name="description" content="Take your selected practice quiz. Answer multiple choice questions, track your progress, and submit for instant results.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
 
+<header class="site-header">
+  <div class="container">
+    <div class="logo-area">
+      <span class="logo-icon" aria-hidden="true">📘</span>
+      <h1 class="site-title">FIA Test Preparation</h1>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+
+  <section id="loading-state" class="card status-message" role="status">
+    Loading your quiz...
+  </section>
+
+  <section id="error-state" class="card status-message error" role="alert" hidden>
+    <p id="error-message">Something went wrong while preparing your quiz.</p>
+    <a href="index.html" class="btn-secondary">Back to Home</a>
+  </section>
+
+  <section id="quiz-container" class="card" hidden aria-labelledby="quiz-heading">
+
+    <div class="quiz-meta">
+      <h2 id="quiz-heading">Quiz: <span id="quiz-topic">Topic</span></h2>
+      <p class="question-counter">
+        Question <span id="current-question-number">1</span> of <span id="total-questions">10</span>
+      </p>
+    </div>
+
+    <div class="progress-bar-wrapper" role="progressbar" id="progress-bar-wrapper"
+         aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Quiz progress">
+      <div id="progress-bar-fill" class="progress-bar-fill"></div>
+    </div>
+
+    <div class="question-block">
+      <h3 id="question-text" class="question-text"></h3>
+
+      <fieldset id="options-fieldset" class="options-fieldset">
+        <legend class="sr-only">Answer options</legend>
+        <div class="options-list" id="options-list" role="radiogroup" aria-labelledby="question-text">
+          <!-- Options injected by quiz.js -->
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="quiz-nav-buttons">
+      <button type="button" id="prev-btn" class="btn-secondary" disabled>
+        Previous
+      </button>
+      <button type="button" id="next-btn" class="btn-primary">
+        Next
+      </button>
+      <button type="button" id="finish-btn" class="btn-primary" hidden>
+        Finish Quiz
+      </button>
+    </div>
+  </section>
+
+  <div id="confirm-finish-dialog" class="modal-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="confirm-finish-heading">
+    <div class="modal-box">
+      <h2 id="confirm-finish-heading">Finish Quiz?</h2>
+      <p id="confirm-finish-text">You still have unanswered questions. Are you sure you want to finish and submit the quiz?</p>
+      <div class="modal-actions">
+        <button type="button" id="confirm-finish-cancel" class="btn-secondary">Cancel</button>
+        <button type="button" id="confirm-finish-submit" class="btn-primary">Yes, Finish</button>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <p>&copy; <span id="current-year"></span> FIA Test Preparation. All rights reserved.</p>
+  </div>
+</footer>
+
+<script>
+  document.getElementById('current-year').textContent = new Date().getFullYear();
+</script>
+<script src="storage.js"></script>
+<script src="quiz.js"></script>
+
+</body>
+</html>
