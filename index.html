@@ -1,1 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIA Test Preparation | Practice Quizzes & MCQs</title>
+<meta name="description" content="Prepare for FIA, PPSC and FPSC exams with topic-wise practice quizzes. Choose a topic, pick your question count, and start testing your knowledge instantly.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
 
+<header class="site-header">
+  <div class="container">
+    <div class="logo-area">
+      <span class="logo-icon" aria-hidden="true">📘</span>
+      <h1 class="site-title">FIA Test Preparation</h1>
+    </div>
+    <p class="site-description">
+      Practice topic-wise multiple choice questions for FIA, PPSC and FPSC exams.
+      Select a topic, choose how many questions you want, and start your quiz instantly.
+    </p>
+  </div>
+</header>
+
+<main class="container">
+
+  <section class="card" aria-labelledby="setup-heading">
+    <h2 id="setup-heading">Start a New Quiz</h2>
+
+    <div id="loading-state" class="status-message" role="status">
+      Loading questions...
+    </div>
+
+    <div id="error-state" class="status-message error" role="alert" hidden>
+      Could not load questions. Please make sure <code>questions.json</code> is available.
+    </div>
+
+    <form id="quiz-setup-form" novalidate hidden>
+      <div class="form-group">
+        <label for="topic-select">Select Topic</label>
+        <select id="topic-select" name="topic" required>
+          <option value="" disabled selected>Choose a topic</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="count-select">Number of Questions</label>
+        <select id="count-select" name="count" required disabled>
+          <option value="" disabled selected>Select topic first</option>
+        </select>
+      </div>
+
+      <button type="submit" id="start-quiz-btn" class="btn-primary" disabled>
+        Start Quiz
+      </button>
+    </form>
+  </section>
+
+  <section class="card" aria-labelledby="history-heading">
+    <h2 id="history-heading">Previous Attempts</h2>
+
+    <div id="history-empty" class="status-message" hidden>
+      You haven't attempted any quizzes yet. Start one above to see your results here.
+    </div>
+
+    <div class="table-wrapper">
+      <table id="history-table" hidden>
+        <caption class="sr-only">Your previous quiz attempts</caption>
+        <thead>
+          <tr>
+            <th scope="col">Topic</th>
+            <th scope="col">Questions</th>
+            <th scope="col">Correct</th>
+            <th scope="col">Wrong</th>
+            <th scope="col">Score</th>
+            <th scope="col">Date</th>
+          </tr>
+        </thead>
+        <tbody id="history-table-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <p>&copy; <span id="current-year"></span> FIA Test Preparation. All rights reserved.</p>
+  </div>
+</footer>
+
+<script src="storage.js"></script>
+<script>
+  document.getElementById('current-year').textContent = new Date().getFullYear();
+
+  const loadingState = document.getElementById('loading-state');
+  const errorState = document.getElementById('error-state');
+  const form = document.getElementById('quiz-setup-form');
+  const topicSelect = document.getElementById('topic-select');
+  const countSelect = document.getElementById('count-select');
+  const startBtn = document.getElementById('start-quiz-btn');
+
+  let questionsData = [];
+  let topicCounts = {};
+
+  function buildQuestionCountOptions(total) {
+    countSelect.innerHTML = '';
+
+    if (!total || total < 1) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'No questions available';
+      countSelect.appendChild(opt);
+      countSelect.disabled = true;
+      startBtn.disabled = true;
+      return;
+    }
+
+    const standardOptions = [5, 10, 15, 20, 25, 30, 50, 100].filter(n => n < total);
+    const options = [...standardOptions];
+
+    options.forEach(num => {
+      const opt = document.createElement('option');
+      opt.value = num;
+      opt.textContent = `${num} Questions`;
+      countSelect.appendChild(opt);
+    });
+
+    const allOpt = document.createElement('option');
+    allOpt.value = total;
+    allOpt.textContent = `All ${total} Questions`;
+    countSelect.appendChild(allOpt);
+
+    countSelect.disabled = false;
+    startBtn.disabled = false;
+  }
+
+  function populateTopics() {
+    const topics = Object.keys(topicCounts).sort((a, b) => a.localeCompare(b));
+
+    topics.forEach(topic => {
+      const opt = document.createElement('option');
+      opt.value = topic;
+      opt.textContent = `${topic} (${topicCounts[topic]})`;
+      topicSelect.appendChild(opt);
+    });
+  }
+
+  function handleTopicChange() {
+    const selectedTopic = topicSelect.value;
+    if (!selectedTopic) {
+      countSelect.disabled = true;
+      startBtn.disabled = true;
+      return;
+    }
+    buildQuestionCountOptions(topicCounts[selectedTopic]);
+  }
+
+  function handleFormSubmit(e) {
+    e.preventDefault();
+    const topic = topicSelect.value;
+    const count = countSelect.value;
+
+    if (!topic || !count) return;
+
+    const params = new URLSearchParams();
+    params.set('topic', topic);
+    params.set('count', count);
+
+    window.location.href = `quiz.html?${params.toString()}`;
+  }
+
+  async function initHomepage() {
+    try {
+      const response = await fetch('questions.json');
+      if (!response.ok) throw new Error('Failed to fetch questions.json');
+      questionsData = await response.json();
+
+      if (!Array.isArray(questionsData)) {
+        throw new Error('questions.json is not an array');
+      }
+
+      topicCounts = questionsData.reduce((acc, q) => {
+        const topic = q.topic || q.category;
+        if (!topic) return acc;
+        acc[topic] = (acc[topic] || 0) + 1;
+        return acc;
+      }, {});
+
+      if (Object.keys(topicCounts).length === 0) {
+        throw new Error('No topics found in questions.json');
+      }
+
+      populateTopics();
+
+      loadingState.hidden = true;
+      form.hidden = false;
+
+      topicSelect.addEventListener('change', handleTopicChange);
+      form.addEventListener('submit', handleFormSubmit);
+
+    } catch (err) {
+      console.error(err);
+      loadingState.hidden = true;
+      errorState.hidden = false;
+    }
+  }
+
+  function renderHistory() {
+    const historyTable = document.getElementById('history-table');
+    const historyBody = document.getElementById('history-table-body');
+    const historyEmpty = document.getElementById('history-empty');
+
+    let attempts = [];
+    try {
+      if (window.QuizStorage && typeof window.QuizStorage.getAttempts === 'function') {
+        attempts = window.QuizStorage.getAttempts();
+      } else {
+        const raw = localStorage.getItem('quizAttempts');
+        attempts = raw ? JSON.parse(raw) : [];
+      }
+    } catch (err) {
+      console.error('Error reading quiz history:', err);
+      attempts = [];
+    }
+
+    if (!attempts || attempts.length === 0) {
+      historyEmpty.hidden = false;
+      historyTable.hidden = true;
+      return;
+    }
+
+    attempts
+      .slice()
+      .reverse()
+      .forEach(attempt => {
+        const row = document.createElement('tr');
+
+        const total = attempt.total ?? attempt.questionCount ?? '';
+        const correct = attempt.correct ?? '';
+        const wrong = attempt.wrong ?? (total !== '' && correct !== '' ? total - correct : '');
+        const score = attempt.score ?? (total ? Math.round((correct / total) * 100) : '');
+        const date = attempt.date ? new Date(attempt.date).toLocaleString() : '';
+
+        row.innerHTML = `
+          <td>${attempt.topic ?? ''}</td>
+          <td>${total}</td>
+          <td>${correct}</td>
+          <td>${wrong}</td>
+          <td>${score !== '' ? score + '%' : ''}</td>
+          <td>${date}</td>
+        `;
+        historyBody.appendChild(row);
+      });
+
+    historyTable.hidden = false;
+    historyEmpty.hidden = true;
+  }
+
+  initHomepage();
+  renderHistory();
+</script>
+
+</body>
+</html>
