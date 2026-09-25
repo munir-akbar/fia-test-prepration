@@ -1,1 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quiz Results | FIA Test Preparation</title>
+<meta name="description" content="View your quiz results, score breakdown, and a detailed review of every question with correct answers and explanations.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
 
+<header class="site-header">
+  <div class="container">
+    <div class="logo-area">
+      <span class="logo-icon" aria-hidden="true">📘</span>
+      <h1 class="site-title">FIA Test Preparation</h1>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+
+  <section id="error-state" class="card status-message error" role="alert" hidden>
+    <p id="error-message">We couldn't find your quiz results. Please try taking the quiz again.</p>
+    <a href="index.html" class="btn-secondary">Back to Home</a>
+  </section>
+
+  <section id="result-container" hidden aria-labelledby="result-heading">
+
+    <div class="card result-summary-card">
+      <h2 id="result-heading">Quiz Results: <span id="result-topic">Topic</span></h2>
+
+      <div class="score-visual-wrapper">
+        <div id="score-circle" class="score-circle" role="img" aria-label="Score percentage">
+          <span id="score-percentage">0%</span>
+        </div>
+      </div>
+
+      <dl class="result-stats-grid">
+        <div class="stat-item">
+          <dt>Total Questions</dt>
+          <dd id="stat-total">0</dd>
+        </div>
+        <div class="stat-item">
+          <dt>Attempted</dt>
+          <dd id="stat-attempted">0</dd>
+        </div>
+        <div class="stat-item stat-correct">
+          <dt>Correct</dt>
+          <dd id="stat-correct">0</dd>
+        </div>
+        <div class="stat-item stat-wrong">
+          <dt>Wrong</dt>
+          <dd id="stat-wrong">0</dd>
+        </div>
+        <div class="stat-item stat-skipped">
+          <dt>Skipped</dt>
+          <dd id="stat-skipped">0</dd>
+        </div>
+        <div class="stat-item">
+          <dt>Score</dt>
+          <dd id="stat-score">0%</dd>
+        </div>
+      </dl>
+
+      <div class="result-actions">
+        <button type="button" id="retake-btn" class="btn-primary">Retake This Quiz</button>
+        <a href="index.html" class="btn-secondary">Try Another Quiz</a>
+        <a href="index.html" class="btn-secondary">Back to Home</a>
+      </div>
+    </div>
+
+    <div class="card review-card">
+      <h2 id="review-heading">Review Answers</h2>
+      <div id="review-list" class="review-list" aria-labelledby="review-heading">
+        <!-- Question reviews injected by result.js -->
+      </div>
+    </div>
+
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <p>&copy; <span id="current-year"></span> FIA Test Preparation. All rights reserved.</p>
+  </div>
+</footer>
+
+<script>
+  document.getElementById('current-year').textContent = new Date().getFullYear();
+</script>
+<script src="storage.js"></script>
+<script src="result.js"></script>
+
+</body>
+</html>
