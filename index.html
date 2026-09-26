@@ -249,14 +249,14 @@
         const score = attempt.score ?? (total ? Math.round((correct / total) * 100) : '');
         const date = attempt.date ? new Date(attempt.date).toLocaleString() : '';
 
-        row.innerHTML = `
-          <td>${attempt.topic ?? ''}</td>
-          <td>${total}</td>
-          <td>${correct}</td>
-          <td>${wrong}</td>
-          <td>${score !== '' ? score + '%' : ''}</td>
-          <td>${date}</td>
-        `;
+       row.innerHTML = `
+  <td data-label="Topic">${attempt.topic ?? ''}</td>
+  <td data-label="Questions">${total}</td>
+  <td data-label="Correct">${correct}</td>
+  <td data-label="Wrong">${wrong}</td>
+  <td data-label="Score">${score !== '' ? score + '%' : ''}</td>
+  <td data-label="Date">${date}</td>
+`;
         historyBody.appendChild(row);
       });
 
