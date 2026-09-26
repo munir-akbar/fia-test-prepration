@@ -244,11 +244,81 @@ main.container {
    ========================================================================== */
 
 .site-header {
-  background: var(--gradient-hero);
+  background: linear-gradient(135deg, #0a2472 0%, #0e6ba8 55%, #1b9c85 100%);
   padding: var(--space-2xl) 0 var(--space-2xl);
   position: relative;
   overflow: hidden;
   color: #ffffff;
+}
+
+/* Geometric shape layer */
+.header-geo {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.geo-shape {
+  position: absolute;
+  display: block;
+  opacity: 0.14;
+}
+
+.geo-1 {
+  width: 260px;
+  height: 260px;
+  top: -110px;
+  left: -60px;
+  background: #f2c94c;
+  border-radius: 30% 70% 60% 40% / 40% 30% 70% 60%;
+  transform: rotate(12deg);
+}
+
+.geo-2 {
+  width: 0;
+  height: 0;
+  top: 20px;
+  right: 8%;
+  border-left: 90px solid transparent;
+  border-right: 90px solid transparent;
+  border-bottom: 150px solid #ffffff;
+  opacity: 0.08;
+  transform: rotate(18deg);
+}
+
+.geo-3 {
+  width: 130px;
+  height: 130px;
+  bottom: -50px;
+  left: 18%;
+  background: transparent;
+  border: 3px solid #f2994a;
+  border-radius: 50%;
+  opacity: 0.2;
+}
+
+.geo-4 {
+  width: 180px;
+  height: 180px;
+  bottom: -90px;
+  right: 12%;
+  background: #ffffff;
+  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+  opacity: 0.07;
+  transform: rotate(-8deg);
+}
+
+.geo-5 {
+  width: 90px;
+  height: 90px;
+  top: 40%;
+  right: 28%;
+  background: #f2c94c;
+  border-radius: 16px;
+  opacity: 0.1;
+  transform: rotate(35deg);
 }
 
 .site-header::before {
@@ -256,9 +326,10 @@ main.container {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(520px 260px at 90% 0%, rgba(255, 255, 255, 0.16), transparent 60%),
-    radial-gradient(420px 220px at 5% 100%, rgba(255, 255, 255, 0.10), transparent 60%);
+    radial-gradient(520px 260px at 90% 0%, rgba(255, 255, 255, 0.14), transparent 60%),
+    radial-gradient(420px 220px at 5% 100%, rgba(255, 255, 255, 0.08), transparent 60%);
   pointer-events: none;
+  z-index: 0;
 }
 
 .site-header .container {
@@ -269,25 +340,24 @@ main.container {
 .logo-area {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  justify-content: center;
+  gap: var(--space-md);
+  flex-direction: column;
+  text-align: center;
 }
 
 .logo-icon {
-  font-size: var(--font-size-xl);
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: var(--radius-md);
-  backdrop-filter: blur(6px);
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border-radius: 50%;
+  background: #ffffff;
+  padding: 6px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.25), 0 0 0 4px rgba(255, 255, 255, 0.18);
 }
 
 .site-title {
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-xl);
   margin: 0;
   color: #ffffff;
   font-family: var(--font-display);
@@ -295,11 +365,13 @@ main.container {
 
 .site-description {
   margin-top: var(--space-md);
-  color: rgba(255, 255, 255, 0.86);
+  color: rgba(255, 255, 255, 0.88);
   max-width: 620px;
   font-size: var(--font-size-md);
+  text-align: center;
+  margin-left: auto;
+  margin-right: auto;
 }
-
 .site-footer {
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
