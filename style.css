@@ -339,7 +339,7 @@ main.container {
 
 /* pull the first card up over the header for a layered look */
 main.container > .card:first-of-type {
-  margin-top: calc(var(--space-2xl) * -1);
+  margin-top: var(--space-xl);
 }
 
 /* ==========================================================================
@@ -1034,8 +1034,8 @@ tbody tr:hover {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  main.container > .card:first-of-type {
-    margin-top: calc(var(--space-xl) * -1);
+ main.container > .card:first-of-type {
+    margin-top: var(--space-lg);
   }
 }
 
@@ -1050,8 +1050,8 @@ tbody tr:hover {
     gap: var(--space-md);
   }
 
-  main.container > .card:first-of-type {
-    margin-top: calc(var(--space-lg) * -1);
+ main.container > .card:first-of-type {
+    margin-top: var(--space-md);
   }
 
   .card {
