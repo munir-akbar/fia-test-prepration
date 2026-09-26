@@ -1162,7 +1162,7 @@ tbody tr:hover {
     flex-direction: column;
   }
 
-  table, thead, tbody, th, td, tr {
+   table, thead, tbody, th, td, tr {
     display: block;
   }
 
@@ -1174,23 +1174,55 @@ tbody tr:hover {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     margin-bottom: var(--space-sm);
-    padding: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
     background: var(--color-surface);
-  }
-
-  tbody td {
-    border-bottom: none;
-    white-space: normal;
     display: flex;
-    justify-content: space-between;
-    gap: var(--space-sm);
-    padding: 6px 4px;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 6px;
   }
 
-  tbody td::before {
+  /* Line 1: Topic — full width on its own row */
+  tbody td[data-label="Topic"] {
+    flex-basis: 100%;
+    width: 100%;
+    font-weight: 700;
+    font-size: var(--font-size-base);
+    color: var(--color-text);
+    padding: 0 0 4px 0;
+    border-bottom: 1px dashed var(--color-border);
+    margin-bottom: 4px;
+  }
+
+  tbody td[data-label="Topic"]::before {
+    content: none;
+  }
+
+  /* Line 2: everything else inline, wrapping as needed */
+  tbody td:not([data-label="Topic"]) {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0;
+    border-bottom: none;
+    font-size: var(--font-size-sm);
+  }
+
+  tbody td:not([data-label="Topic"])::after {
+    content: "•";
+    color: var(--color-text-faint);
+    margin-left: 8px;
+  }
+
+  tbody td:not([data-label="Topic"]):last-child::after {
+    content: none;
+  }
+
+  tbody td:not([data-label="Topic"])::before {
     content: attr(data-label);
     font-weight: 700;
     color: var(--color-text-muted);
-    margin-right: var(--space-sm);
   }
 }
