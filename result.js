@@ -94,25 +94,50 @@
    * page refresh doesn't duplicate the history entry.
    */
   function saveAttemptOnce(sessionResult) {
-    let alreadySaved = false;
-    try {
-      alreadySaved = sessionStorage.getItem(SAVED_FLAG_KEY) === 'true';
-    } catch (err) {
-      console.error('result.js: failed to read saved-flag from sessionStorage', err);
-    }
+  // Set the guard flag FIRST, synchronously, before doing any async-adjacent
+  // work. This closes the race where two near-simultaneous calls both read
+  // "not yet saved" before either one writes the flag.
+  let alreadySaved = false;
+  try {
+    alreadySaved = sessionStorage.getItem(SAVED_FLAG_KEY) === 'true';
+  } catch (err) {
+    console.error('result.js: failed to read saved-flag from sessionStorage', err);
+  }
 
-    if (alreadySaved) return;
+  if (alreadySaved) return;
 
-    if (window.QuizStorage && typeof window.QuizStorage.saveQuizAttempt === 'function') {
-      window.QuizStorage.saveQuizAttempt(sessionResult);
-    }
+  try {
+    sessionStorage.setItem(SAVED_FLAG_KEY, 'true');
+  } catch (err) {
+    console.error('result.js: failed to set saved-flag in sessionStorage', err);
+  }
 
-    try {
-      sessionStorage.setItem(SAVED_FLAG_KEY, 'true');
-    } catch (err) {
-      console.error('result.js: failed to set saved-flag in sessionStorage', err);
+  // Extra safety net: even if the flag check above somehow raced, refuse to
+  // save an attempt that is identical (topic + total + correct + wrong +
+  // skipped) to the most recent saved attempt within the last few seconds.
+  if (window.QuizStorage && typeof window.QuizStorage.getQuizHistory === 'function') {
+    const history = window.QuizStorage.getQuizHistory();
+    const last = history[history.length - 1];
+    if (last &&
+        last.topic === sessionResult.topic &&
+        last.total === sessionResult.total &&
+        last.correct === sessionResult.correct &&
+        last.wrong === sessionResult.wrong &&
+        last.skipped === sessionResult.skipped) {
+      const lastTime = new Date(last.date).getTime();
+      const now = Date.now();
+      if (!isNaN(lastTime) && (now - lastTime) < 5000) {
+        // Same result saved less than 5 seconds ago — treat as a duplicate
+        // call and skip saving again.
+        return;
+      }
     }
   }
+
+  if (window.QuizStorage && typeof window.QuizStorage.saveQuizAttempt === 'function') {
+    window.QuizStorage.saveQuizAttempt(sessionResult);
+  }
+}
 
   /* ==========================================================================
      Rendering: summary
