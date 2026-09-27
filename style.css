@@ -1088,6 +1088,43 @@ tbody tr:hover {
 }
 
 /* ==========================================================================
+   Delete attempt button (history table)
+   ========================================================================== */
+
+.history-actions-cell {
+  text-align: right;
+  width: 1%;
+  white-space: nowrap;
+}
+
+.delete-attempt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-round);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.delete-attempt-btn:hover {
+  background: var(--color-error-bg);
+  border-color: var(--color-error-border);
+  color: var(--color-error);
+  transform: scale(1.08);
+}
+
+.delete-attempt-btn:active {
+  transform: scale(0.95);
+}
+/* ==========================================================================
    Responsive breakpoints
    ========================================================================== */
 
@@ -1113,9 +1150,24 @@ tbody tr:hover {
 
 /* Mobile */
 @media (max-width: 480px) {
+
+     .history-actions-cell {
+    flex-basis: 100%;
+    width: 100%;
+    text-align: right;
+    padding: 4px 0 0 0;
+    border-top: 1px dashed var(--color-border);
+    margin-top: 6px;
+  }
+
+  .history-actions-cell::before {
+    content: none;
+  }
+   
   .site-header {
     padding: var(--space-xl) 0 var(--space-xl);
   }
+   
 
   main.container {
     padding-top: var(--space-lg);
