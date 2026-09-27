@@ -74,15 +74,16 @@
       <table id="history-table" hidden>
         <caption class="sr-only">Your previous quiz attempts</caption>
         <thead>
-          <tr>
-            <th scope="col">Topic</th>
-            <th scope="col">Questions</th>
-            <th scope="col">Correct</th>
-            <th scope="col">Wrong</th>
-            <th scope="col">Score</th>
-            <th scope="col">Date</th>
-          </tr>
-        </thead>
+  <tr>
+    <th scope="col">Topic</th>
+    <th scope="col">Questions</th>
+    <th scope="col">Correct</th>
+    <th scope="col">Wrong</th>
+    <th scope="col">Score</th>
+    <th scope="col">Date</th>
+    <th scope="col"><span class="sr-only">Actions</span></th>
+  </tr>
+</thead>
         <tbody id="history-table-body"></tbody>
       </table>
     </div>
@@ -213,59 +214,90 @@
     }
   }
 
-  function renderHistory() {
-    const historyTable = document.getElementById('history-table');
-    const historyBody = document.getElementById('history-table-body');
-    const historyEmpty = document.getElementById('history-empty');
+ function renderHistory() {
+  const historyTable = document.getElementById('history-table');
+  const historyBody = document.getElementById('history-table-body');
+  const historyEmpty = document.getElementById('history-empty');
 
-    let attempts = [];
-    try {
-      if (window.QuizStorage && typeof window.QuizStorage.getAttempts === 'function') {
-        attempts = window.QuizStorage.getAttempts();
-      } else {
-        const raw = localStorage.getItem('quizAttempts');
-        attempts = raw ? JSON.parse(raw) : [];
-      }
-    } catch (err) {
-      console.error('Error reading quiz history:', err);
-      attempts = [];
+  let attempts = [];
+  try {
+    if (window.QuizStorage && typeof window.QuizStorage.getAttempts === 'function') {
+      attempts = window.QuizStorage.getAttempts();
+    } else {
+      const raw = localStorage.getItem('quizAttempts');
+      attempts = raw ? JSON.parse(raw) : [];
     }
-
-    if (!attempts || attempts.length === 0) {
-      historyEmpty.hidden = false;
-      historyTable.hidden = true;
-      return;
-    }
-
-    attempts
-      .slice()
-      .reverse()
-      .forEach(attempt => {
-        const row = document.createElement('tr');
-
-        const total = attempt.total ?? attempt.questionCount ?? '';
-        const correct = attempt.correct ?? '';
-        const wrong = attempt.wrong ?? (total !== '' && correct !== '' ? total - correct : '');
-        const score = attempt.score ?? (total ? Math.round((correct / total) * 100) : '');
-        const date = attempt.date ? new Date(attempt.date).toLocaleString() : '';
-
-       row.innerHTML = `
-  <td data-label="Topic">${attempt.topic ?? ''}</td>
-  <td data-label="Questions">${total}</td>
-  <td data-label="Correct">${correct}</td>
-  <td data-label="Wrong">${wrong}</td>
-  <td data-label="Score">${score !== '' ? score + '%' : ''}</td>
-  <td data-label="Date">${date}</td>
-`;
-        historyBody.appendChild(row);
-      });
-
-    historyTable.hidden = false;
-    historyEmpty.hidden = true;
+  } catch (err) {
+    console.error('Error reading quiz history:', err);
+    attempts = [];
   }
+
+  historyBody.innerHTML = '';
+
+  if (!attempts || attempts.length === 0) {
+    historyEmpty.hidden = false;
+    historyTable.hidden = true;
+    return;
+  }
+
+  attempts
+    .slice()
+    .reverse()
+    .forEach(attempt => {
+      const row = document.createElement('tr');
+      row.dataset.attemptId = attempt.id ?? '';
+
+      const total = attempt.total ?? attempt.questionCount ?? '';
+      const correct = attempt.correct ?? '';
+      const wrong = attempt.wrong ?? (total !== '' && correct !== '' ? total - correct : '');
+      const score = attempt.score ?? (total ? Math.round((correct / total) * 100) : '');
+      const date = attempt.date ? new Date(attempt.date).toLocaleString() : '';
+
+      row.innerHTML = `
+        <td data-label="Topic">${attempt.topic ?? ''}</td>
+        <td data-label="Questions">${total}</td>
+        <td data-label="Correct">${correct}</td>
+        <td data-label="Wrong">${wrong}</td>
+        <td data-label="Score">${score !== '' ? score + '%' : ''}</td>
+        <td data-label="Date">${date}</td>
+        <td data-label="" class="history-actions-cell">
+          <button type="button" class="delete-attempt-btn" aria-label="Delete this quiz attempt">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </td>
+      `;
+      historyBody.appendChild(row);
+    });
+
+  historyTable.hidden = false;
+  historyEmpty.hidden = true;
+}
+
+/**
+ * Handle clicks on any "delete attempt" button using event delegation,
+ * so it works for rows added after the initial render.
+ */
+function handleHistoryTableClick(event) {
+  const deleteBtn = event.target.closest('.delete-attempt-btn');
+  if (!deleteBtn) return;
+
+  const row = deleteBtn.closest('tr');
+  const attemptId = row?.dataset.attemptId;
+  if (!attemptId) return;
+
+  const confirmed = window.confirm('Delete this quiz attempt? This cannot be undone.');
+  if (!confirmed) return;
+
+  if (window.QuizStorage && typeof window.QuizStorage.deleteQuizAttempt === 'function') {
+    window.QuizStorage.deleteQuizAttempt(attemptId);
+  }
+
+  renderHistory();
+}
 
   initHomepage();
   renderHistory();
+  document.getElementById('history-table-body').addEventListener('click', handleHistoryTableClick);
 </script>
 
 </body>
