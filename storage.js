@@ -161,6 +161,24 @@
     return success ? record : null;
   }
 
+     /**
+   * Delete a single quiz attempt from history by its unique id.
+   * Returns true if an attempt was found and removed, false otherwise.
+   */
+  function deleteQuizAttempt(attemptId) {
+    if (!attemptId) return false;
+
+    const history = getQuizHistory();
+    const filtered = history.filter(attempt => attempt.id !== attemptId);
+
+    if (filtered.length === history.length) {
+      // Nothing matched — no-op.
+      return false;
+    }
+
+    return safeSet(STORAGE_KEYS.HISTORY, filtered);
+  }
+
   /**
    * Clear all saved quiz history. Returns true on success.
    */
@@ -264,6 +282,7 @@
     getQuizHistory,
     getAttempts: getQuizHistory, // alias, in case other scripts expect this name
     saveQuizAttempt,
+     deleteQuizAttempt,
     clearQuizHistory,
 
     // Used questions (topic-specific)
