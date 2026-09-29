@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FIA Test Preparation | Practice Quizzes & MCQs</title>
-<meta name="description" content="Prepare for FIA, PPSC and FPSC exams with topic-wise practice quizzes. Choose a topic, pick your question count, and start testing your knowledge instantly.">
+<meta name="description" content="Prepare for FIA, PPSC and FPSC exams with topic-wise practice quizzes. Choose a topic, difficulty, and question count, and start testing your knowledge instantly.">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -22,9 +22,9 @@
       <img src="fia-logo.png" alt="FIA Federal Investigation Agency logo" class="logo-icon">
       <h1 class="site-title">FIA Test Preparation</h1>
     </div>
-     <p class="site-description">
+    <p class="site-description">
       Practice topic-wise multiple choice questions for FIA, PPSC and FPSC exams.
-      Select a topic, choose how many questions you want, and start your quiz instantly.
+      Select a topic, choose your difficulty and question count, and start your quiz instantly.
     </p>
   </div>
 </header>
@@ -51,9 +51,16 @@
       </div>
 
       <div class="form-group">
+        <label for="difficulty-select">Select Difficulty</label>
+        <select id="difficulty-select" name="difficulty" required disabled>
+          <option value="" disabled selected>Choose topic first</option>
+        </select>
+      </div>
+
+      <div class="form-group">
         <label for="count-select">Number of Questions</label>
         <select id="count-select" name="count" required disabled>
-          <option value="" disabled selected>Select topic first</option>
+          <option value="" disabled selected>Select difficulty first</option>
         </select>
       </div>
 
@@ -74,16 +81,17 @@
       <table id="history-table" hidden>
         <caption class="sr-only">Your previous quiz attempts</caption>
         <thead>
-  <tr>
-    <th scope="col">Topic</th>
-    <th scope="col">Questions</th>
-    <th scope="col">Correct</th>
-    <th scope="col">Wrong</th>
-    <th scope="col">Score</th>
-    <th scope="col">Date</th>
-    <th scope="col"><span class="sr-only">Actions</span></th>
-  </tr>
-</thead>
+          <tr>
+            <th scope="col">Topic</th>
+            <th scope="col">Difficulty</th>
+            <th scope="col">Questions</th>
+            <th scope="col">Correct</th>
+            <th scope="col">Wrong</th>
+            <th scope="col">Score</th>
+            <th scope="col">Date</th>
+            <th scope="col"><span class="sr-only">Actions</span></th>
+          </tr>
+        </thead>
         <tbody id="history-table-body"></tbody>
       </table>
     </div>
@@ -105,11 +113,95 @@
   const errorState = document.getElementById('error-state');
   const form = document.getElementById('quiz-setup-form');
   const topicSelect = document.getElementById('topic-select');
+  const difficultySelect = document.getElementById('difficulty-select');
   const countSelect = document.getElementById('count-select');
   const startBtn = document.getElementById('start-quiz-btn');
 
   let questionsData = [];
-  let topicCounts = {};
+  // Nested pool index: pool["Topic Name"]["easy"] = [question, question, ...]
+  let pool = {};
+
+  const DIFFICULTY_LABELS = {
+    easy: 'Easy',
+    hard: 'Hard'
+  };
+
+  /**
+   * Build a nested { topic: { difficulty: [questions] } } index from the
+   * flat questions array, so counts can be looked up instantly.
+   */
+  function buildPoolIndex(questions) {
+    const index = {};
+    questions.forEach(q => {
+      const topic = q.topic;
+      const difficulty = (q.difficulty === 'hard') ? 'hard' : 'easy';
+      if (!topic) return;
+
+      if (!index[topic]) {
+        index[topic] = { easy: [], hard: [] };
+      }
+      index[topic][difficulty].push(q);
+    });
+    return index;
+  }
+
+  function populateTopics() {
+    const topics = Object.keys(pool).sort((a, b) => a.localeCompare(b));
+
+    topics.forEach(topic => {
+      const totalForTopic = pool[topic].easy.length + pool[topic].hard.length;
+      const opt = document.createElement('option');
+      opt.value = topic;
+      opt.textContent = `${topic} (${totalForTopic})`;
+      topicSelect.appendChild(opt);
+    });
+  }
+
+  /**
+   * Populate the difficulty dropdown based on the selected topic,
+   * only offering difficulties that actually have at least 1 question.
+   */
+  function populateDifficultiesForTopic(topic) {
+    difficultySelect.innerHTML = '';
+
+    const topicPool = pool[topic];
+    if (!topicPool) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'No difficulties available';
+      difficultySelect.appendChild(opt);
+      difficultySelect.disabled = true;
+      return;
+    }
+
+    const availableDifficulties = ['easy', 'hard'].filter(d => topicPool[d].length > 0);
+
+    if (availableDifficulties.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'No questions available';
+      difficultySelect.appendChild(opt);
+      difficultySelect.disabled = true;
+      return;
+    }
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.disabled = true;
+    placeholder.selected = true;
+    placeholder.textContent = 'Choose a difficulty';
+    difficultySelect.appendChild(placeholder);
+
+    availableDifficulties.forEach(difficulty => {
+      const count = topicPool[difficulty].length;
+      const opt = document.createElement('option');
+      opt.value = difficulty;
+      opt.textContent = `${DIFFICULTY_LABELS[difficulty]} (${count})`;
+      difficultySelect.appendChild(opt);
+    });
+
+    difficultySelect.disabled = false;
+  }
 
   function buildQuestionCountOptions(total) {
     countSelect.innerHTML = '';
@@ -127,6 +219,13 @@
     const standardOptions = [5, 10, 15, 20, 25, 30, 50, 100].filter(n => n < total);
     const options = [...standardOptions];
 
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.disabled = true;
+    placeholder.selected = true;
+    placeholder.textContent = 'Choose question count';
+    countSelect.appendChild(placeholder);
+
     options.forEach(num => {
       const opt = document.createElement('option');
       opt.value = num;
@@ -140,39 +239,56 @@
     countSelect.appendChild(allOpt);
 
     countSelect.disabled = false;
-    startBtn.disabled = false;
-  }
-
-  function populateTopics() {
-    const topics = Object.keys(topicCounts).sort((a, b) => a.localeCompare(b));
-
-    topics.forEach(topic => {
-      const opt = document.createElement('option');
-      opt.value = topic;
-      opt.textContent = `${topic} (${topicCounts[topic]})`;
-      topicSelect.appendChild(opt);
-    });
+    startBtn.disabled = true; // re-enabled once a count is actually chosen
   }
 
   function handleTopicChange() {
     const selectedTopic = topicSelect.value;
+
+    countSelect.innerHTML = '<option value="" disabled selected>Select difficulty first</option>';
+    countSelect.disabled = true;
+    startBtn.disabled = true;
+
     if (!selectedTopic) {
-      countSelect.disabled = true;
-      startBtn.disabled = true;
+      difficultySelect.innerHTML = '<option value="" disabled selected>Choose topic first</option>';
+      difficultySelect.disabled = true;
       return;
     }
-    buildQuestionCountOptions(topicCounts[selectedTopic]);
+
+    populateDifficultiesForTopic(selectedTopic);
+  }
+
+  function handleDifficultyChange() {
+    const selectedTopic = topicSelect.value;
+    const selectedDifficulty = difficultySelect.value;
+
+    startBtn.disabled = true;
+
+    if (!selectedTopic || !selectedDifficulty) {
+      countSelect.innerHTML = '<option value="" disabled selected>Select difficulty first</option>';
+      countSelect.disabled = true;
+      return;
+    }
+
+    const available = pool[selectedTopic][selectedDifficulty].length;
+    buildQuestionCountOptions(available);
+  }
+
+  function handleCountChange() {
+    startBtn.disabled = !countSelect.value;
   }
 
   function handleFormSubmit(e) {
     e.preventDefault();
     const topic = topicSelect.value;
+    const difficulty = difficultySelect.value;
     const count = countSelect.value;
 
-    if (!topic || !count) return;
+    if (!topic || !difficulty || !count) return;
 
     const params = new URLSearchParams();
     params.set('topic', topic);
+    params.set('difficulty', difficulty);
     params.set('count', count);
 
     window.location.href = `quiz.html?${params.toString()}`;
@@ -188,14 +304,9 @@
         throw new Error('questions.json is not an array');
       }
 
-      topicCounts = questionsData.reduce((acc, q) => {
-        const topic = q.topic || q.category;
-        if (!topic) return acc;
-        acc[topic] = (acc[topic] || 0) + 1;
-        return acc;
-      }, {});
+      pool = buildPoolIndex(questionsData);
 
-      if (Object.keys(topicCounts).length === 0) {
+      if (Object.keys(pool).length === 0) {
         throw new Error('No topics found in questions.json');
       }
 
@@ -205,6 +316,8 @@
       form.hidden = false;
 
       topicSelect.addEventListener('change', handleTopicChange);
+      difficultySelect.addEventListener('change', handleDifficultyChange);
+      countSelect.addEventListener('change', handleCountChange);
       form.addEventListener('submit', handleFormSubmit);
 
     } catch (err) {
@@ -214,89 +327,92 @@
     }
   }
 
- function renderHistory() {
-  const historyTable = document.getElementById('history-table');
-  const historyBody = document.getElementById('history-table-body');
-  const historyEmpty = document.getElementById('history-empty');
+  function renderHistory() {
+    const historyTable = document.getElementById('history-table');
+    const historyBody = document.getElementById('history-table-body');
+    const historyEmpty = document.getElementById('history-empty');
 
-  let attempts = [];
-  try {
-    if (window.QuizStorage && typeof window.QuizStorage.getAttempts === 'function') {
-      attempts = window.QuizStorage.getAttempts();
-    } else {
-      const raw = localStorage.getItem('quizAttempts');
-      attempts = raw ? JSON.parse(raw) : [];
+    let attempts = [];
+    try {
+      if (window.QuizStorage && typeof window.QuizStorage.getAttempts === 'function') {
+        attempts = window.QuizStorage.getAttempts();
+      } else {
+        const raw = localStorage.getItem('quizAttempts');
+        attempts = raw ? JSON.parse(raw) : [];
+      }
+    } catch (err) {
+      console.error('Error reading quiz history:', err);
+      attempts = [];
     }
-  } catch (err) {
-    console.error('Error reading quiz history:', err);
-    attempts = [];
+
+    historyBody.innerHTML = '';
+
+    if (!attempts || attempts.length === 0) {
+      historyEmpty.hidden = false;
+      historyTable.hidden = true;
+      return;
+    }
+
+    attempts
+      .slice()
+      .reverse()
+      .forEach(attempt => {
+        const row = document.createElement('tr');
+        row.dataset.attemptId = attempt.id ?? '';
+
+        const total = attempt.total ?? attempt.questionCount ?? '';
+        const correct = attempt.correct ?? '';
+        const wrong = attempt.wrong ?? (total !== '' && correct !== '' ? total - correct : '');
+        const score = attempt.score ?? attempt.percentage ?? (total ? Math.round((correct / total) * 100) : '');
+        const date = attempt.date ? new Date(attempt.date).toLocaleString() : '';
+
+        // Safe fallback for old history records saved before difficulty existed.
+        let difficultyLabel = '—';
+        if (attempt.difficulty === 'easy') difficultyLabel = 'Easy';
+        else if (attempt.difficulty === 'hard') difficultyLabel = 'Hard';
+
+        row.innerHTML = `
+          <td data-label="Topic">${attempt.topic ?? ''}</td>
+          <td data-label="Difficulty">${difficultyLabel}</td>
+          <td data-label="Questions">${total}</td>
+          <td data-label="Correct">${correct}</td>
+          <td data-label="Wrong">${wrong}</td>
+          <td data-label="Score">${score !== '' ? score + '%' : ''}</td>
+          <td data-label="Date">${date}</td>
+          <td data-label="" class="history-actions-cell">
+            <button type="button" class="delete-attempt-btn" aria-label="Delete this quiz attempt">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </td>
+        `;
+        historyBody.appendChild(row);
+      });
+
+    historyTable.hidden = false;
+    historyEmpty.hidden = true;
   }
 
-  historyBody.innerHTML = '';
+  function handleHistoryTableClick(event) {
+    const deleteBtn = event.target.closest('.delete-attempt-btn');
+    if (!deleteBtn) return;
 
-  if (!attempts || attempts.length === 0) {
-    historyEmpty.hidden = false;
-    historyTable.hidden = true;
-    return;
+    const row = deleteBtn.closest('tr');
+    const attemptId = row?.dataset.attemptId;
+    if (!attemptId) return;
+
+    const confirmed = window.confirm('Delete this quiz attempt? This cannot be undone.');
+    if (!confirmed) return;
+
+    if (window.QuizStorage && typeof window.QuizStorage.deleteQuizAttempt === 'function') {
+      window.QuizStorage.deleteQuizAttempt(attemptId);
+    }
+
+    renderHistory();
   }
-
-  attempts
-    .slice()
-    .reverse()
-    .forEach(attempt => {
-      const row = document.createElement('tr');
-      row.dataset.attemptId = attempt.id ?? '';
-
-      const total = attempt.total ?? attempt.questionCount ?? '';
-      const correct = attempt.correct ?? '';
-      const wrong = attempt.wrong ?? (total !== '' && correct !== '' ? total - correct : '');
-      const score = attempt.score ?? (total ? Math.round((correct / total) * 100) : '');
-      const date = attempt.date ? new Date(attempt.date).toLocaleString() : '';
-
-      row.innerHTML = `
-        <td data-label="Topic">${attempt.topic ?? ''}</td>
-        <td data-label="Questions">${total}</td>
-        <td data-label="Correct">${correct}</td>
-        <td data-label="Wrong">${wrong}</td>
-        <td data-label="Score">${score !== '' ? score + '%' : ''}</td>
-        <td data-label="Date">${date}</td>
-        <td data-label="" class="history-actions-cell">
-          <button type="button" class="delete-attempt-btn" aria-label="Delete this quiz attempt">
-            <span aria-hidden="true">&times;</span>
-          </button>
-        </td>
-      `;
-      historyBody.appendChild(row);
-    });
-
-  historyTable.hidden = false;
-  historyEmpty.hidden = true;
-}
-
-/**
- * Handle clicks on any "delete attempt" button using event delegation,
- * so it works for rows added after the initial render.
- */
-function handleHistoryTableClick(event) {
-  const deleteBtn = event.target.closest('.delete-attempt-btn');
-  if (!deleteBtn) return;
-
-  const row = deleteBtn.closest('tr');
-  const attemptId = row?.dataset.attemptId;
-  if (!attemptId) return;
-
-  const confirmed = window.confirm('Delete this quiz attempt? This cannot be undone.');
-  if (!confirmed) return;
-
-  if (window.QuizStorage && typeof window.QuizStorage.deleteQuizAttempt === 'function') {
-    window.QuizStorage.deleteQuizAttempt(attemptId);
-  }
-
-  renderHistory();
-}
 
   initHomepage();
   renderHistory();
+
   document.getElementById('history-table-body').addEventListener('click', handleHistoryTableClick);
 </script>
 
