@@ -3,14 +3,20 @@
    Quiz engine for FIA Test Preparation.
 
    Responsibilities:
-   - Read topic/count from URL
-   - Load and validate questions.json
-   - Generate a non-repeating quiz using storage.js used-question tracking
+   - Read topic/difficulty/count from URL
+   - Load and validate questions.json (new easy/hard structure)
+   - Generate a non-repeating quiz using storage.js used-question tracking,
+     scoped by topic + difficulty
    - Shuffle answer options independently per question (Fisher-Yates)
    - Handle navigation, answer selection, and scoring
    - Persist the completed session for result.html
 
    Relies on the global `QuizStorage` object defined in storage.js.
+
+   IMPORTANT: question.id is an opaque STRING (e.g. "101-easy", "101-hard").
+   It must never be parsed as a number or assumed sequential. baseId links
+   the easy/hard pair together but is NOT used as the tracking key — each
+   id is tracked independently, scoped by topic+difficulty.
    ========================================================================== */
 
 (function () {
@@ -52,10 +58,11 @@
      ------------------------------------------------------------------ */
   let quizState = {
     topic: null,
+    difficulty: null,       // "easy" | "hard"
     requestedCount: 0,
-    questions: [],       // array of prepared question objects (see prepareQuestion)
+    questions: [],           // array of prepared question objects (see prepareQuestion)
     currentIndex: 0,
-    answers: []           // parallel array: answers[i] = selected option string | null
+    answers: []               // parallel array: answers[i] = selected option string | null
   };
 
   /* ==========================================================================
@@ -75,12 +82,14 @@
   }
 
   /**
-   * Read and validate URL query parameters.
-   * Returns { topic, count } or throws an Error with a user-facing message.
+   * Read and validate URL query parameters: topic, difficulty, count.
+   * Returns { topic, difficulty, count } or throws an Error with a
+   * user-facing message.
    */
   function readUrlParams() {
     const params = new URLSearchParams(window.location.search);
     const topicRaw = params.get('topic');
+    const difficultyRaw = params.get('difficulty');
     const countRaw = params.get('count');
 
     if (!topicRaw || topicRaw.trim() === '') {
@@ -88,18 +97,31 @@
     }
 
     const topic = decodeURIComponent(topicRaw);
-    const count = parseInt(countRaw, 10);
 
+    const difficulty = (difficultyRaw || '').trim().toLowerCase();
+    if (difficulty !== 'easy' && difficulty !== 'hard') {
+      throw new Error('No valid difficulty was selected. Please go back and choose Easy or Hard.');
+    }
+
+    const count = parseInt(countRaw, 10);
     if (!countRaw || isNaN(count) || count < 1) {
       throw new Error('Invalid number of questions requested. Please go back and try again.');
     }
 
-    return { topic, count };
+    return { topic, difficulty, count };
   }
 
   /**
    * Validate the raw questions.json data structure.
    * Returns the array if valid, throws otherwise.
+   *
+   * Each valid question must have:
+   * - a non-empty string `id` (e.g. "101-easy") — NOT assumed numeric
+   * - a string `topic`
+   * - a `difficulty` of "easy" or "hard"
+   * - a `question` string
+   * - an `options` array with >= 2 entries
+   * - a `correctAnswer` string that exactly matches one of the options
    */
   function validateQuestionsData(data) {
     if (!Array.isArray(data)) {
@@ -109,8 +131,9 @@
     const valid = data.filter(q =>
       q &&
       typeof q === 'object' &&
-      (typeof q.id === 'number' || typeof q.id === 'string') &&
+      typeof q.id === 'string' && q.id.trim() !== '' &&
       typeof q.topic === 'string' &&
+      (q.difficulty === 'easy' || q.difficulty === 'hard') &&
       typeof q.question === 'string' &&
       Array.isArray(q.options) &&
       q.options.length >= 2 &&
@@ -130,12 +153,15 @@
    * - Shuffle its options independently.
    * - Keep the correct answer identified by VALUE (not by index),
    *   so shuffling never breaks correctness checks.
+   * - Preserve id/baseId/topic/difficulty as-is (id stays a string).
    */
   function prepareQuestion(rawQuestion) {
     const shuffledOptions = shuffleArray(rawQuestion.options);
     return {
-      id: rawQuestion.id,
+      id: rawQuestion.id,               // opaque string, e.g. "101-easy"
+      baseId: rawQuestion.baseId,       // links easy/hard pair; NOT used for tracking
       topic: rawQuestion.topic,
+      difficulty: rawQuestion.difficulty,
       question: rawQuestion.question,
       options: shuffledOptions,
       correctAnswer: rawQuestion.correctAnswer, // stored by value, immune to shuffling
@@ -144,37 +170,40 @@
   }
 
   /* ==========================================================================
-     Quiz generation (topic filtering + used-question rotation)
+     Quiz generation (topic+difficulty filtering + used-question rotation)
      ========================================================================== */
 
   /**
    * Build the list of questions for this quiz session, following the
-   * unused-first / recycle-when-needed rule, then shuffle order & options.
+   * unused-first / recycle-when-needed rule, scoped strictly to the
+   * selected topic + difficulty. Then shuffle question order & options.
    *
    * Throws an Error with a user-facing message on any edge case failure.
    */
-  function generateQuizQuestions(allQuestions, topic, requestedCount) {
-    const topicQuestions = allQuestions.filter(q => q.topic === topic);
+  function generateQuizQuestions(allQuestions, topic, difficulty, requestedCount) {
+    const pool = allQuestions.filter(q => q.topic === topic && q.difficulty === difficulty);
 
-    if (topicQuestions.length === 0) {
-      throw new Error(`No questions were found for the topic "${topic}".`);
+    if (pool.length === 0) {
+      throw new Error(`No ${difficulty} questions were found for the topic "${topic}".`);
     }
 
-    if (topicQuestions.length < requestedCount) {
+    if (pool.length < requestedCount) {
       throw new Error(
-        `Only ${topicQuestions.length} question(s) are available for "${topic}", ` +
+        `Only ${pool.length} ${difficulty} question(s) are available for "${topic}", ` +
         `but ${requestedCount} were requested.`
       );
     }
 
-    // Get already-used question IDs for this topic (topic-specific tracking).
+    // Get already-used question IDs for this topic+difficulty pair.
+    // NOTE: this is scoped by topic+difficulty, so an Easy question being
+    // used never marks its Hard counterpart (same baseId) as used.
     let usedIds = [];
     if (window.QuizStorage && typeof window.QuizStorage.getUsedQuestionIds === 'function') {
-      usedIds = window.QuizStorage.getUsedQuestionIds(topic) || [];
+      usedIds = window.QuizStorage.getUsedQuestionIds(topic, difficulty) || [];
     }
-    const usedIdSet = new Set(usedIds);
+    const usedIdSet = new Set(usedIds.map(String));
 
-    let unusedPool = topicQuestions.filter(q => !usedIdSet.has(q.id));
+    let unusedPool = pool.filter(q => !usedIdSet.has(String(q.id)));
     let selected = [];
 
     if (unusedPool.length >= requestedCount) {
@@ -186,31 +215,32 @@
 
       const stillNeeded = requestedCount - selected.length;
 
-      // ...then recycle the used pool for this topic...
+      // ...then recycle the used pool for this topic+difficulty...
       if (window.QuizStorage && typeof window.QuizStorage.resetUsedQuestions === 'function') {
-        window.QuizStorage.resetUsedQuestions(topic);
+        window.QuizStorage.resetUsedQuestions(topic, difficulty);
       }
 
-      // ...and pick remaining questions from the FULL topic pool,
+      // ...and pick remaining questions from the FULL topic+difficulty pool,
       // excluding any already selected in this quiz (no duplicates).
-      const selectedIds = new Set(selected.map(q => q.id));
-      const remainingCandidates = topicQuestions.filter(q => !selectedIds.has(q.id));
+      const selectedIds = new Set(selected.map(q => String(q.id)));
+      const remainingCandidates = pool.filter(q => !selectedIds.has(String(q.id)));
       const additional = shuffleArray(remainingCandidates).slice(0, stillNeeded);
 
       selected = selected.concat(additional);
     }
 
-    // Final safety net: dedupe by id and trim to requested count.
+    // Final safety net: dedupe by id (string) and trim to requested count.
     const seenIds = new Set();
     selected = selected.filter(q => {
-      if (seenIds.has(q.id)) return false;
-      seenIds.add(q.id);
+      const idStr = String(q.id);
+      if (seenIds.has(idStr)) return false;
+      seenIds.add(idStr);
       return true;
     }).slice(0, requestedCount);
 
     if (selected.length < requestedCount) {
       throw new Error(
-        `Could not assemble enough unique questions for "${topic}". ` +
+        `Could not assemble enough unique ${difficulty} questions for "${topic}". ` +
         `Please try a smaller question count.`
       );
     }
@@ -221,15 +251,16 @@
   }
 
   /**
-   * Mark the questions used in this quiz as "used" for the topic,
-   * so future quizzes prefer unseen questions.
+   * Mark the questions used in this quiz as "used" for the topic+difficulty,
+   * so future quizzes (of the SAME difficulty) prefer unseen questions.
+   * This never touches the other difficulty's used pool.
    */
-  function markSessionQuestionsAsUsed(topic, questions) {
+  function markSessionQuestionsAsUsed(topic, difficulty, questions) {
     if (!window.QuizStorage || typeof window.QuizStorage.markQuestionsAsUsed !== 'function') {
       return;
     }
-    const ids = questions.map(q => q.id);
-    window.QuizStorage.markQuestionsAsUsed(topic, ids);
+    const ids = questions.map(q => String(q.id));
+    window.QuizStorage.markQuestionsAsUsed(topic, difficulty, ids);
   }
 
   /* ==========================================================================
@@ -255,15 +286,18 @@
     quizContainer.hidden = false;
   }
 
+  const DIFFICULTY_LABELS = { easy: 'Easy', hard: 'Hard' };
+
   /**
    * Render the current question, its options, progress bar, and nav buttons.
    */
   function renderCurrentQuestion() {
-    const { questions, currentIndex, answers, topic } = quizState;
+    const { questions, currentIndex, answers, topic, difficulty } = quizState;
     const total = questions.length;
     const question = questions[currentIndex];
 
-    quizTopicEl.textContent = topic;
+    const difficultyLabel = DIFFICULTY_LABELS[difficulty] || difficulty;
+    quizTopicEl.textContent = `${topic} — ${difficultyLabel}`;
     currentQuestionNumberEl.textContent = String(currentIndex + 1);
     totalQuestionsEl.textContent = String(total);
 
@@ -370,12 +404,12 @@
 
   /**
    * Calculate results, persist the session for result.html, mark questions
-   * as used, and redirect to result.html.
+   * as used (scoped by topic+difficulty), and redirect to result.html.
    */
   function finishQuiz() {
     confirmDialog.hidden = true;
 
-    const { questions, answers, topic } = quizState;
+    const { questions, answers, topic, difficulty } = quizState;
     const total = questions.length;
 
     let correct = 0;
@@ -399,6 +433,7 @@
 
       return {
         id: q.id,
+        baseId: q.baseId,
         question: q.question,
         options: q.options,
         correctAnswer: q.correctAnswer,
@@ -413,6 +448,7 @@
 
     const sessionResult = {
       topic: topic,
+      difficulty: difficulty,
       total: total,
       attempted: attempted,
       correct: correct,
@@ -435,8 +471,9 @@
       window.QuizStorage.saveQuizAttempt(sessionResult);
     }
 
-    // Mark these questions as used for future anti-repeat rotation.
-    markSessionQuestionsAsUsed(topic, questions);
+    // Mark these questions as used for future anti-repeat rotation,
+    // scoped to this topic+difficulty pool only.
+    markSessionQuestionsAsUsed(topic, difficulty, questions);
 
     // Redirect to results page.
     window.location.href = 'result.html';
@@ -481,7 +518,7 @@
 
     let preparedQuestions;
     try {
-      preparedQuestions = generateQuizQuestions(allQuestions, params.topic, params.count);
+      preparedQuestions = generateQuizQuestions(allQuestions, params.topic, params.difficulty, params.count);
     } catch (err) {
       console.error(err);
       showError(err.message);
@@ -490,6 +527,7 @@
 
     quizState = {
       topic: params.topic,
+      difficulty: params.difficulty,
       requestedCount: params.count,
       questions: preparedQuestions,
       currentIndex: 0,
