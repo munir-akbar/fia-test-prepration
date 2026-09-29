@@ -1,11 +1,17 @@
 /* ==========================================================================
    result.js
    Renders the results page from the completed quiz session created by
-   quiz.js. Reads session data (sessionStorage), displays a summary and
-   full answer review, and ensures the attempt is saved to permanent
-   history exactly once (even across page refreshes).
+   quiz.js. Reads session data (sessionStorage), displays a summary
+   (including Topic + Difficulty) and full answer review, and ensures the
+   attempt is saved to permanent history exactly once (even across page
+   refreshes).
 
    Relies on the global `QuizStorage` object defined in storage.js.
+
+   IMPORTANT: question ids are opaque strings (e.g. "101-hard"). Review
+   items are matched to the user's answer via the stored `userAnswer`/
+   `correctAnswer` TEXT already present in each session question record —
+   never by array position — so shuffled option order never breaks review.
    ========================================================================== */
 
 (function () {
@@ -17,6 +23,8 @@
   const SESSION_STORAGE_KEY = 'fiaTestPrep_currentSession';
   const SAVED_FLAG_KEY = 'fiaTestPrep_currentSessionSaved';
 
+  const DIFFICULTY_LABELS = { easy: 'Easy', hard: 'Hard' };
+
   /* ------------------------------------------------------------------
      DOM references
      ------------------------------------------------------------------ */
@@ -25,6 +33,7 @@
   const resultContainer = document.getElementById('result-container');
 
   const resultTopicEl = document.getElementById('result-topic');
+  const resultDifficultyEl = document.getElementById('result-difficulty');
   const scoreCircleEl = document.getElementById('score-circle');
   const scorePercentageEl = document.getElementById('score-percentage');
 
@@ -42,10 +51,6 @@
      Session retrieval & validation
      ========================================================================== */
 
-  /**
-   * Safely read and parse the completed quiz session from sessionStorage.
-   * Returns null if missing, corrupted, or structurally invalid.
-   */
   function getSessionResult() {
     let raw;
     try {
@@ -73,9 +78,6 @@
     return data;
   }
 
-  /**
-   * Basic structural validation of the session result object.
-   */
   function isValidSession(data) {
     if (!data || typeof data !== 'object') return false;
     if (typeof data.topic !== 'string' || data.topic.trim() === '') return false;
@@ -88,56 +90,48 @@
      Persisting the attempt (once per session)
      ========================================================================== */
 
-  /**
-   * Save the completed attempt to permanent history via QuizStorage,
-   * but only once per session — guarded by a sessionStorage flag so a
-   * page refresh doesn't duplicate the history entry.
-   */
   function saveAttemptOnce(sessionResult) {
-  // Set the guard flag FIRST, synchronously, before doing any async-adjacent
-  // work. This closes the race where two near-simultaneous calls both read
-  // "not yet saved" before either one writes the flag.
-  let alreadySaved = false;
-  try {
-    alreadySaved = sessionStorage.getItem(SAVED_FLAG_KEY) === 'true';
-  } catch (err) {
-    console.error('result.js: failed to read saved-flag from sessionStorage', err);
-  }
+    let alreadySaved = false;
+    try {
+      alreadySaved = sessionStorage.getItem(SAVED_FLAG_KEY) === 'true';
+    } catch (err) {
+      console.error('result.js: failed to read saved-flag from sessionStorage', err);
+    }
 
-  if (alreadySaved) return;
+    if (alreadySaved) return;
 
-  try {
-    sessionStorage.setItem(SAVED_FLAG_KEY, 'true');
-  } catch (err) {
-    console.error('result.js: failed to set saved-flag in sessionStorage', err);
-  }
+    // Set the guard flag immediately to close the race where two
+    // near-simultaneous calls both read "not yet saved".
+    try {
+      sessionStorage.setItem(SAVED_FLAG_KEY, 'true');
+    } catch (err) {
+      console.error('result.js: failed to set saved-flag in sessionStorage', err);
+    }
 
-  // Extra safety net: even if the flag check above somehow raced, refuse to
-  // save an attempt that is identical (topic + total + correct + wrong +
-  // skipped) to the most recent saved attempt within the last few seconds.
-  if (window.QuizStorage && typeof window.QuizStorage.getQuizHistory === 'function') {
-    const history = window.QuizStorage.getQuizHistory();
-    const last = history[history.length - 1];
-    if (last &&
-        last.topic === sessionResult.topic &&
-        last.total === sessionResult.total &&
-        last.correct === sessionResult.correct &&
-        last.wrong === sessionResult.wrong &&
-        last.skipped === sessionResult.skipped) {
-      const lastTime = new Date(last.date).getTime();
-      const now = Date.now();
-      if (!isNaN(lastTime) && (now - lastTime) < 5000) {
-        // Same result saved less than 5 seconds ago — treat as a duplicate
-        // call and skip saving again.
-        return;
+    // Extra safety net: refuse to save an attempt identical to the most
+    // recent saved attempt within the last few seconds.
+    if (window.QuizStorage && typeof window.QuizStorage.getQuizHistory === 'function') {
+      const history = window.QuizStorage.getQuizHistory();
+      const last = history[history.length - 1];
+      if (last &&
+          last.topic === sessionResult.topic &&
+          last.difficulty === sessionResult.difficulty &&
+          last.total === sessionResult.total &&
+          last.correct === sessionResult.correct &&
+          last.wrong === sessionResult.wrong &&
+          last.skipped === sessionResult.skipped) {
+        const lastTime = new Date(last.date).getTime();
+        const now = Date.now();
+        if (!isNaN(lastTime) && (now - lastTime) < 5000) {
+          return;
+        }
       }
     }
-  }
 
-  if (window.QuizStorage && typeof window.QuizStorage.saveQuizAttempt === 'function') {
-    window.QuizStorage.saveQuizAttempt(sessionResult);
+    if (window.QuizStorage && typeof window.QuizStorage.saveQuizAttempt === 'function') {
+      window.QuizStorage.saveQuizAttempt(sessionResult);
+    }
   }
-}
 
   /* ==========================================================================
      Rendering: summary
@@ -160,6 +154,11 @@
 
     resultTopicEl.textContent = sessionResult.topic;
 
+    if (resultDifficultyEl) {
+      const label = DIFFICULTY_LABELS[sessionResult.difficulty] || '—';
+      resultDifficultyEl.textContent = label;
+    }
+
     statTotalEl.textContent = String(total);
     statAttemptedEl.textContent = String(attempted);
     statCorrectEl.textContent = String(correct);
@@ -176,9 +175,6 @@
      Rendering: answer review
      ========================================================================== */
 
-  /**
-   * Build a human-readable status label + CSS class for a question result.
-   */
   function getStatusMeta(status) {
     switch (status) {
       case 'correct':
@@ -193,7 +189,9 @@
 
   /**
    * Render one reviewed question block.
-   * Preserves the option order exactly as shuffled/stored by quiz.js.
+   * Preserves the option order exactly as shuffled/stored by quiz.js, and
+   * matches correctness by comparing TEXT values (correctAnswer/userAnswer),
+   * never by array index — so shuffled options never break the review.
    */
   function renderReviewItem(questionResult, index) {
     const { question, options, correctAnswer, userAnswer, status, explanation } = questionResult;
@@ -203,7 +201,6 @@
     item.className = 'review-item';
     item.setAttribute('aria-labelledby', `review-q-${index}`);
 
-    // Header: question number + status badge
     const header = document.createElement('div');
     header.className = 'review-item-header';
 
@@ -218,13 +215,11 @@
     header.appendChild(numberEl);
     header.appendChild(badgeEl);
 
-    // Question text
     const questionTextEl = document.createElement('h3');
     questionTextEl.id = `review-q-${index}`;
     questionTextEl.className = 'review-question-text';
     questionTextEl.textContent = question;
 
-    // Options list (in the same shuffled order as displayed during the quiz)
     const optionsListEl = document.createElement('div');
     optionsListEl.className = 'review-options-list';
 
@@ -247,7 +242,6 @@
       textSpan.textContent = optionText;
       optionEl.appendChild(textSpan);
 
-      // Tag showing what this option represents
       let tagText = '';
       if (isCorrectOption && isUserSelected) {
         tagText = 'Your answer • Correct';
@@ -271,7 +265,6 @@
     item.appendChild(questionTextEl);
     item.appendChild(optionsListEl);
 
-    // Skipped note (explicit, since there's no user selection to show above)
     if (status === 'skipped') {
       const skippedNote = document.createElement('p');
       skippedNote.className = 'text-muted';
@@ -279,7 +272,6 @@
       item.appendChild(skippedNote);
     }
 
-    // Explanation, if provided
     if (explanation && explanation.trim() !== '') {
       const explanationEl = document.createElement('p');
       explanationEl.className = 'review-explanation';
@@ -332,13 +324,14 @@
 
   /**
    * "Retake This Quiz" — send the user back to the homepage with the same
-   * topic pre-selectable. Since topic selection lives on index.html, we
-   * pass the topic as a query param the homepage can optionally honor;
-   * at minimum this returns the user to start a new quiz.
+   * topic and difficulty pre-fillable. Since selection lives on
+   * index.html, we pass them as query params the homepage can optionally
+   * read; at minimum this returns the user to start a new quiz.
    */
   function handleRetake(sessionResult) {
     const topic = encodeURIComponent(sessionResult.topic || '');
-    window.location.href = `index.html?topic=${topic}`;
+    const difficulty = encodeURIComponent(sessionResult.difficulty || '');
+    window.location.href = `index.html?topic=${topic}&difficulty=${difficulty}`;
   }
 
   /* ==========================================================================
@@ -353,11 +346,8 @@
       return;
     }
 
-    // Persist to permanent history (guarded against duplicate saves on refresh).
     saveAttemptOnce(sessionResult);
 
-    // Render summary + review using data already present in the session
-    // (no need to reload questions.json).
     renderSummary(sessionResult);
     renderReviewList(sessionResult);
 
