@@ -4,7 +4,7 @@
 
    Exposes a global `QuizStorage` object with functions for:
    - Quiz attempt history
-   - Topic-specific "used question" tracking
+   - Topic + difficulty specific "used question" tracking
 
    No UI code, no question loading, no quiz-generation logic here —
    this file only manages persistence.
@@ -64,7 +64,7 @@
   }
 
   /**
-   * Normalize a topic name into a safe object key.
+   * Normalize a topic name into a safe string key.
    * Falls back to "Unknown" for missing/invalid topics.
    */
   function normalizeTopic(topic) {
@@ -75,7 +75,29 @@
   }
 
   /**
+   * Normalize a difficulty value into "easy" or "hard".
+   * Falls back to "easy" for missing/invalid/legacy values so old
+   * code paths and old history records never crash.
+   */
+  function normalizeDifficulty(difficulty) {
+    if (typeof difficulty !== 'string') return 'easy';
+    const d = difficulty.trim().toLowerCase();
+    return (d === 'hard') ? 'hard' : 'easy';
+  }
+
+  /**
+   * Build the composite key used to namespace used-question tracking
+   * by BOTH topic and difficulty, so Easy and Hard pools never mix.
+   * Example: "Civil Servants Act 1973 and Allied Rules|easy"
+   */
+  function buildTopicDifficultyKey(topic, difficulty) {
+    return `${normalizeTopic(topic)}|${normalizeDifficulty(difficulty)}`;
+  }
+
+  /**
    * Deduplicate an array of question IDs while preserving order.
+   * IDs are treated as opaque strings (e.g. "101-easy") — never
+   * coerced to numbers.
    */
   function dedupeIds(ids) {
     if (!Array.isArray(ids)) return [];
@@ -83,9 +105,10 @@
     const result = [];
     ids.forEach(id => {
       if (id === undefined || id === null) return;
-      if (!seen.has(id)) {
-        seen.add(id);
-        result.push(id);
+      const idStr = String(id);
+      if (!seen.has(idStr)) {
+        seen.add(idStr);
+        result.push(idStr);
       }
     });
     return result;
@@ -96,7 +119,7 @@
      ------------------------------------------------------------------ */
 
   /**
-   * Get the full list of saved quiz attempts (newest last, as stored).
+   * Get the full list of saved quiz attempts (oldest first, as stored).
    * Always returns an array, even if storage is empty/corrupted.
    */
   function getQuizHistory() {
@@ -111,6 +134,7 @@
    * are defaulted safely so the app never crashes on incomplete data):
    * {
    *   topic: string,
+   *   difficulty: "easy" | "hard",
    *   total: number,
    *   attempted: number,
    *   correct: number,
@@ -142,6 +166,8 @@
       id: generateAttemptId(),
       date: new Date().toISOString(),
       topic: normalizeTopic(attempt.topic),
+      // Stored as given (already normalized upstream), but guarded here too.
+      difficulty: attempt.difficulty ? normalizeDifficulty(attempt.difficulty) : undefined,
       total,
       attempted,
       correct,
@@ -149,8 +175,9 @@
       skipped,
       percentage,
       // Per-question review data (question text, options, user answer,
-      // correct answer, explanation, etc.) — stored as-given so result.html
-      // can re-render a full review without re-fetching questions.json.
+      // correct answer, explanation, question id, etc.) — stored as-given
+      // so result.html can re-render a full review without re-fetching
+      // questions.json.
       questions: Array.isArray(attempt.questions) ? attempt.questions : []
     };
 
@@ -159,24 +186,6 @@
 
     const success = safeSet(STORAGE_KEYS.HISTORY, history);
     return success ? record : null;
-  }
-
-     /**
-   * Delete a single quiz attempt from history by its unique id.
-   * Returns true if an attempt was found and removed, false otherwise.
-   */
-  function deleteQuizAttempt(attemptId) {
-    if (!attemptId) return false;
-
-    const history = getQuizHistory();
-    const filtered = history.filter(attempt => attempt.id !== attemptId);
-
-    if (filtered.length === history.length) {
-      // Nothing matched — no-op.
-      return false;
-    }
-
-    return safeSet(STORAGE_KEYS.HISTORY, filtered);
   }
 
   /**
@@ -192,13 +201,30 @@
     }
   }
 
+  /**
+   * Delete a single quiz attempt from history by its unique id.
+   * Returns true if an attempt was found and removed, false otherwise.
+   */
+  function deleteQuizAttempt(attemptId) {
+    if (!attemptId) return false;
+
+    const history = getQuizHistory();
+    const filtered = history.filter(attempt => attempt.id !== attemptId);
+
+    if (filtered.length === history.length) {
+      return false;
+    }
+
+    return safeSet(STORAGE_KEYS.HISTORY, filtered);
+  }
+
   /* ------------------------------------------------------------------
-     Used Questions (topic-specific)
+     Used Questions (topic + difficulty specific)
      ------------------------------------------------------------------ */
 
   /**
    * Read the entire used-questions map from storage.
-   * Shape: { "Topic A": [1, 4, 8], "Topic B": [2, 5] }
+   * Shape: { "Topic A|easy": ["1-easy","4-easy"], "Topic A|hard": ["1-hard"] }
    * Always returns a plain object, even if storage is empty/corrupted.
    */
   function getUsedQuestionsMap() {
@@ -214,23 +240,24 @@
   }
 
   /**
-   * Get the array of used question IDs for a specific topic.
-   * Returns an empty array if the topic has no recorded usage yet.
+   * Get the array of used question IDs for a specific topic + difficulty.
+   * IDs are strings (e.g. "101-easy") — never coerced to numbers.
+   * Returns an empty array if there is no recorded usage yet.
    */
-  function getUsedQuestionIds(topic) {
-    const key = normalizeTopic(topic);
+  function getUsedQuestionIds(topic, difficulty) {
+    const key = buildTopicDifficultyKey(topic, difficulty);
     const map = getUsedQuestionsMap();
     const ids = map[key];
-    return Array.isArray(ids) ? ids : [];
+    return Array.isArray(ids) ? ids.map(String) : [];
   }
 
   /**
-   * Add one or more question IDs to a topic's used pool.
+   * Add one or more question IDs to a topic+difficulty's used pool.
    * Duplicate IDs are ignored automatically.
-   * Returns the updated array of used IDs for that topic.
+   * Returns the updated array of used IDs for that topic+difficulty.
    */
-  function markQuestionsAsUsed(topic, questionIds) {
-    const key = normalizeTopic(topic);
+  function markQuestionsAsUsed(topic, difficulty, questionIds) {
+    const key = buildTopicDifficultyKey(topic, difficulty);
     const idsToAdd = Array.isArray(questionIds) ? questionIds : [questionIds];
 
     const map = getUsedQuestionsMap();
@@ -244,12 +271,12 @@
   }
 
   /**
-   * Reset (clear) the used-question pool for a single topic.
+   * Reset (clear) the used-question pool for a single topic + difficulty.
    * Used when recycling the pool because not enough unused questions remain.
    * Returns true on success.
    */
-  function resetUsedQuestions(topic) {
-    const key = normalizeTopic(topic);
+  function resetUsedQuestions(topic, difficulty) {
+    const key = buildTopicDifficultyKey(topic, difficulty);
     const map = getUsedQuestionsMap();
 
     if (Object.prototype.hasOwnProperty.call(map, key)) {
@@ -260,7 +287,7 @@
   }
 
   /**
-   * Clear used-question tracking for ALL topics.
+   * Clear used-question tracking for ALL topics and difficulties.
    * Returns true on success.
    */
   function clearAllUsedQuestions() {
@@ -282,14 +309,17 @@
     getQuizHistory,
     getAttempts: getQuizHistory, // alias, in case other scripts expect this name
     saveQuizAttempt,
-     deleteQuizAttempt,
+    deleteQuizAttempt,
     clearQuizHistory,
 
-    // Used questions (topic-specific)
+    // Used questions (topic + difficulty specific)
     getUsedQuestionIds,
     markQuestionsAsUsed,
     resetUsedQuestions,
-    clearAllUsedQuestions
+    clearAllUsedQuestions,
+
+    // Exposed in case other scripts want consistent normalization
+    normalizeDifficulty
   };
 
   // Expose globally for use by index.html, quiz.js, result.js
