@@ -1278,3 +1278,18 @@ tbody tr:hover {
     color: var(--color-text-muted);
   }
 }
+
+/* ==========================================================================
+   Difficulty badge line (result page)
+   ========================================================================== */
+
+.result-difficulty-line {
+  margin: -8px 0 var(--space-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.result-difficulty-line .badge {
+  margin-left: 4px;
+}
